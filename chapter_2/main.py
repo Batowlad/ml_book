@@ -97,3 +97,69 @@ strat_train_set, strat_test_set = train_test_split(housing_full, test_size=0.2, 
 for set_ in (strat_test_set, strat_train_set):
     set_.drop("income_cat", axis=1, inplace=True) 
 
+#####################################################
+########## VISUALIZING GEOGRAPHICAL DATA ############
+#####################################################
+# housing_full.plot(kind="scatter", x="longitude", y="latitude", grid=True, alpha=0.2)
+housing_full.plot(kind="scatter", x="longitude", y="latitude", grid=True, s=housing_full["population"]/100, label="population", c="median_house_value", cmap="jet", colorbar=True, sharex=False, figsize=(10, 7))
+# plt.show()
+
+
+######## STANDARD CORRELATION COEFFICIENT (PEARSON'S R) ########
+corr_matrix = housing_full.corr(numeric_only=True)
+print(corr_matrix["median_house_value"].sort_values(ascending=False))
+
+
+############ MOST CORRELATION ATTRIBUTE ############
+housing_full.plot(kind="scatter", x="median_income", y="median_house_value", grid=True, alpha=0.1)
+# plt.show()
+
+
+###################################################################
+############### PREPARING DATA FOR ML ALGORITHMS ##################
+###################################################################
+housing = strat_train_set.drop("median_house_value", axis=1)
+housing_labels = strat_train_set["median_house_value"].copy()
+
+######## CLEANING THE DATA OF AN ATTRIBUTE #########
+from sklearn.impute import SimpleImputer
+
+imputer = SimpleImputer(strategy="median") # specifiying that we want to replace missing values with the median of that attribute
+housing_num = housing.select_dtypes(include=[numpy.number]) # copy of the data with only numberical attributes (exclude ocean proximity stuff)
+# imputer.fit(housing_num)
+X = imputer.fit_transform(housing_num) # apply trained imputer to transform the set by replacing missing values with median values
+print(imputer.statistics_) # where the computed median is stored
+
+# There's more powerful imputers instead of SimpleImputer like KNNInputer - replaces each missing value with the mean of k nearest neighbours
+# Also, IterativeImputer - trains a regression model per feature to predict the missing values based on all the other available features
+
+######## RECOVERING FROM NUMPY ARRAY TO PANDAS DATA FRAME ########
+housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing_num.index)
+
+######## HANDLING TEXT AND CATEGORICAL ATTRIBUTES ########
+from sklearn.preprocessing import OrdinalEncoder
+
+housing_cat = housing["ocean_proximity"]
+ordinal_encoder = OrdinalEncoder()
+housing_cat_econded = ordinal_encoder.fit_transform(housing_cat)
+
+####### FIXING AN ISSUE WITH ENCODED VALUES THROUGH OneHotEncoder ########
+from sklearn.preprocessing import OneHotEncoder
+cat_encoder = OneHotEncoder()
+housing_cat_1hot = cat_encoder.fit_transform(housing_cat) # outputs a sparse matrix
+
+
+######## FEATURE SCALING AND TRANSFORMATION ########
+# ML algorithms are bad when scaling is very different feature scaling helps with that. There are two ways fix this:
+
+#1. Min-max scaling (Normalization) - Scaling all the values to be from -1 to 1 (subtracts the min value from all values, divides the results by the difference between min and max)
+from sklearn.preprocessing import MinMaxScaler
+
+min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+housing_num_min_max_scaled = min_max_scaler.fit_transform(housing_num)
+
+#2. Standardization - Subtracts the mean value, divides the result by standard deviation
+from sklearn.preprocessing import StandardScaler
+
+std_scaler = StandardScaler()
+housing_num_std_scaled = std_scaler.fit_transform(housing_num)
