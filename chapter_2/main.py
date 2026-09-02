@@ -107,7 +107,7 @@ housing_full.plot(kind="scatter", x="longitude", y="latitude", grid=True, s=hous
 
 ######## STANDARD CORRELATION COEFFICIENT (PEARSON'S R) ########
 corr_matrix = housing_full.corr(numeric_only=True)
-print(corr_matrix["median_house_value"].sort_values(ascending=False))
+print(f"Standard Correlation Coefficient:\n{corr_matrix["median_house_value"].sort_values(ascending=False)}")
 
 
 ############ MOST CORRELATION ATTRIBUTE ############
@@ -128,7 +128,7 @@ imputer = SimpleImputer(strategy="median") # specifiying that we want to replace
 housing_num = housing.select_dtypes(include=[numpy.number]) # copy of the data with only numberical attributes (exclude ocean proximity stuff)
 # imputer.fit(housing_num)
 X = imputer.fit_transform(housing_num) # apply trained imputer to transform the set by replacing missing values with median values
-print(imputer.statistics_) # where the computed median is stored
+print(f"Imputer statistics: {imputer.statistics_}") # where the computed median is stored
 
 # There's more powerful imputers instead of SimpleImputer like KNNInputer - replaces each missing value with the mean of k nearest neighbours
 # Also, IterativeImputer - trains a regression model per feature to predict the missing values based on all the other available features
@@ -139,7 +139,7 @@ housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing_num.inde
 ######## HANDLING TEXT AND CATEGORICAL ATTRIBUTES ########
 from sklearn.preprocessing import OrdinalEncoder
 
-housing_cat = housing["ocean_proximity"]
+housing_cat = housing[["ocean_proximity"]]
 ordinal_encoder = OrdinalEncoder()
 housing_cat_econded = ordinal_encoder.fit_transform(housing_cat)
 
@@ -163,3 +163,34 @@ from sklearn.preprocessing import StandardScaler
 
 std_scaler = StandardScaler()
 housing_num_std_scaled = std_scaler.fit_transform(housing_num)
+
+############ RBF ##############
+# (used when a feature has multimodal distributation (mode - peak)) You add a feature for each of the modes
+# representing the similarity between the housing median age and that particular mode.
+# gaussian rbf - output value decays exponentially as the input value moves away from the fixed point.
+#                The equation for rbf of similarity x and 35 would be: exp(-y(x-35)^2); y - gamma
+from sklearn.metrics.pairwise import rbf_kernel
+
+age_simil = rbf_kernel(housing[["housing_median_age"]], [[35]], gamma=0.1)
+
+######### TARGET VALUE TRANSFORMATION #########
+from sklearn.linear_model import LinearRegression
+
+target_scaler = StandardScaler()
+scaled_labels = target_scaler.fit_transform(housing_labels.to_frame())
+
+model = LinearRegression()
+model.fit(housing[["median_income"]], scaled_labels)
+new_data = housing[["median_income"]].iloc[:5] #pretending this is new data
+
+scaled_predictions = model.predict(new_data)
+predictions = target_scaler.inverse_transform(scaled_predictions)
+
+#A better way to do this is to use TransformedTargetRegressor - it automatically uses transformer to scale the labels and train the regression model
+from sklearn.compose import TransformedTargetRegressor
+
+model = TransformedTargetRegressor(regressor=LinearRegression(), transformer=StandardScaler())
+model.fit(housing[["median_income"]], housing_labels)
+predictions = model.predict(new_data)
+
+print(housing_labels)
