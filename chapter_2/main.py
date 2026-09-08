@@ -193,4 +193,43 @@ model = TransformedTargetRegressor(regressor=LinearRegression(), transformer=Sta
 model.fit(housing[["median_income"]], housing_labels)
 predictions = model.predict(new_data)
 
-print(housing_labels)
+# print(housing_labels)
+
+########## CUSTOM TRANSFORMERS ##########
+from sklearn.preprocessing import FunctionTransformer
+
+log_transformer = FunctionTransformer(numpy.log)
+log_pop = log_transformer.transform(housing[["population"]])
+
+#Another example
+sf_coords = 37.7749, -122.41
+sf_transformer = FunctionTransformer(rbf_kernel, kw_args=dict(Y=[sf_coords], gamma=0.1))
+
+sf_simil = sf_transformer.transform(housing[["latitude", "longitude"]])
+
+
+######### FULLY BUILDING A CUSTOM TRANSOFRMER ##########
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.validation import check_array, check_is_fitted
+
+class StandardScalerClone(BaseEstimator, TransformerMixin):
+    def __init__(self, with_mean=True): #with_mean - determines whether to center the data by subtracting the mean
+        self.with_mean = self.with_mean
+
+    def fit(self, X, y=None): #                 y is required even without using, X is data
+        X = check_array(X) #                    checks that X is an array with finite float values
+        self.mean_ = X.mean(axis=0) #           axis=0 - goes down (by column); axis=1 - goes right (by row)
+        self.scale_ = X.std(axis=0) #           std - calculates standard deviation
+        self.n_features_in_ = X.shape[1] #      every estimator stores this in fit()
+        return self #                           ALWAYS RETURN self
+
+    def transform(self, X):
+        check_is_fitted(self) #looks for learned attributes (with trailing)
+        X = check_array(X)
+        assert self.n_features_in_ == X.shape[1]
+        if self.with_mean:
+            X = X - self.mean_
+
+        return X / self.scale_
+
+    
