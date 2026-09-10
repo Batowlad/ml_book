@@ -232,4 +232,100 @@ class StandardScalerClone(BaseEstimator, TransformerMixin):
 
         return X / self.scale_
 
-    
+
+# A custom transformer that uses other estimators
+from sklearn.cluster import KMeans
+
+class ClusterSimilarity(BaseEstimator, TransformerMixin):
+    def __init__(self, n_clusters=10, gamma=1.0, random_state=None):
+        self.n_clusters = n_clusters
+        self.gamma = gamma
+        self.random_state = random_state
+
+    def fit(self, X, y=None, sample_weight=None):
+        self.kmeans_ = KMeans(self.n_clusters, random_state=self.random_state)
+        self.kmeans_.fit(X, sample_weight=sample_weight)
+
+        return self #always return self in fit
+
+    def transform(self, X):
+        return rbf_kernel(X, self.kmeans_.cluster_centers_, gamma=self.gamma)
+
+    def get_feature_names_out(self, names=None):
+        return [f"Cluster {i} similarity" for i in range(self.n_clusters)]
+
+######## TRANSFORMATION PIPELINE ##########
+from sklearn.pipeline import Pipeline
+
+num_pipeline = Pipeline([
+    ("impute", SimpleImputer(strategy="median")),
+    ("standardize", StandardScaler())
+])
+#NOTE: Your last arg determines what method it will call if you pass a transformer it will sequentually apply the transformer method. 
+#      If the last estimator were a predictor calling it would sequentuallhy apply all the transformations and pass result to predictor's predict()
+
+# You can also do it without naming transformers just by passing their classes
+from sklearn.pipeline import make_pipeline
+
+num_pipeline = make_pipeline(SimpleImputer(strategy="median"), StandardScaler())
+
+#NOTE: If you call the fit() method on a pipeline it calls fit_transform()
+
+housing_num_prepared = num_pipeline.fit_transform(housing_num)
+df_housing_num_prepared = pd.DataFrame(housing_num_prepared, columns=num_pipeline.get_feature_names_out(), index=housing_num.index) #If you want the output to be a nice DataFrame
+
+#NOTE: Pipelines also support indexing - if you call pipeline[1] it will return the second estimator.
+#      Or you can also call pipeline["simple_imputer"] and it wil return a SimpleImputer() estimator in the pipeline.
+
+
+
+########## COLUMN TRANSFORMER ############
+from sklearn.compose import ColumnTransformer
+
+num_attribs = ["longitude", "latitude", "housing_median_age", "total_rooms", "total_bedroos", "population", "households", "median_income"]
+cat_attribs = ["ocean_proximity"]
+
+cat_pipeline = make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore"))
+
+preprocessing = ColumnTransformer([
+    ("num", num_pipeline, num_attribs),
+    ("cat", cat_pipeline, cat_attribs)
+    ])
+
+# An automatic way to select all the features of a given type
+from sklearn.compose import make_column_selector, make_column_transformer
+
+preprocessing = make_column_transformer(
+    (num_pipeline, make_column_selector(dtype_include=numpy.number)), 
+    (cat_pipeline, make_column_selector(dtype_include=object))
+    )
+
+housing_prepared = preprocessing.fit_transform(housing)
+
+
+############### A FULL PIPELINE BEFORE TRAINING (FINALLY) ################
+def column_ratio(X):
+    return X[:, [0]] / X[:, [1]]
+
+def ratio_name(function_transformer, feature_names_in):
+    return ["ratio"] #feature names out
+
+def ratio_pipeline():
+    return make_pipeline(SimpleImputer(strategy="median"),
+                         FunctionTransformer(column_ratio, feature_names_out=ratio_name),
+                         StandardScaler())
+
+log_pipeline = make_pipeline(SimpleImputer(strategy="median"), FunctionTransformer(numpy.log, feature_names_out="one-to-one"), StandardScaler())
+
+cluster_simil = ClusterSimilarity(n_clusters=10, gamma=1., random_state=42)
+default_num_pipeline = make_pipeline(SimpleImputer(strategy="median"), StandardScaler())
+
+preprocessing = ColumnTransformer([
+    ("bedrooms", ratio_pipeline(), ["total_bedrooms", "total_rooms"]), 
+    ("rooms_per_house", ratio_pipeline(), ["total_rooms", "households"]), 
+    ("people_per_house", ratio_pipeline(), ["population", "households"]), 
+    ("log", log_pipeline, ["total_bedrooms", "total_rooms", "population", "households", "median_income"]), 
+    ("geo", cluster_simil, ["latitude", "longitude"]), 
+    ("cat", cat_pipeline, make_column_selector(dtype_include=object))], 
+    remainder=default_num_pipeline)
+
