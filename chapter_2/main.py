@@ -329,3 +329,34 @@ preprocessing = ColumnTransformer([
     ("cat", cat_pipeline, make_column_selector(dtype_include=object))], 
     remainder=default_num_pipeline)
 
+###################################
+######### ACTUAL ML ALGO ##########
+###################################
+from sklearn.linear_model import LinearRegression
+
+lin_reg = make_pipeline(preprocessing, LinearRegression())
+lin_reg.fit(housing, housing_labels)
+
+housing_predictions = lin_reg.predict(housing)
+print(housing_predictions)
+
+######### MEASURING MODEL'S RMSE ##########
+from sklearn.metrics import root_mean_squared_error
+lin_rmse = root_mean_squared_error(housing_labels, housing_predictions) 
+print(lin_rmse)
+
+######### USING A STRONGER MODEL ##########
+from sklearn.tree import DecisionTreeRegressor
+
+tree_reg = make_pipeline(preprocessing, DecisionTreeRegressor(random_state=42))
+tree_reg.fit(housing, housing_labels)
+
+housing_predictions = tree_reg.predict(housing)
+print(housing_predictions)
+
+tree_rmse = root_mean_squared_error(housing_labels, housing_predictions)
+print(tree_rmse) # outputs: 0 - badly overfits the data, we need a better evaluator
+
+########### A BETTER EVALUATOR ############
+# We are going to be using Cross-validation
+
